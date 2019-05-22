@@ -84,7 +84,7 @@ __global__ void rs_calculate_updates(device_graph d_graph, device_pgm d_pgm, int
   }
 }
 
-__global__ void rs_compute_edge_residuals(device_graph d_graph, device_pgm d_pgm, float* edge_residuals, int* edges_effected, int edge_count) {
+__global__ void rs_compute_edge_residuals(device_graph d_graph, device_pgm d_pgm, double* edge_residuals, int* edges_effected, int edge_count) {
   int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
   int step = gridDim.x * blockDim.x;
 
@@ -94,7 +94,7 @@ __global__ void rs_compute_edge_residuals(device_graph d_graph, device_pgm d_pgm
       compute_message(d_graph, d_pgm, edge_id);
       
       // Now compute the residual from this.
-      float edge_residual = message_delta(d_pgm.edges, d_pgm.workspace, d_pgm.edge_idx_to_edges_idx[edge_id]);
+      double edge_residual = message_delta(d_pgm.edges, d_pgm.workspace, d_pgm.edge_idx_to_edges_idx[edge_id]);
       edge_residuals[edge_id] = edge_residual;
     }
 
@@ -103,7 +103,7 @@ __global__ void rs_compute_edge_residuals(device_graph d_graph, device_pgm d_pgm
   }
 }
 
-__global__ void rs_compute_node_residuals(device_graph d_graph, device_pgm d_pgm, float* node_residuals, float* edge_residuals, int* nodes_effected, int node_count) {
+__global__ void rs_compute_node_residuals(device_graph d_graph, device_pgm d_pgm, double* node_residuals, double* edge_residuals, int* nodes_effected, int node_count) {
 
   int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
   int step = gridDim.x * blockDim.x;
@@ -112,12 +112,12 @@ __global__ void rs_compute_node_residuals(device_graph d_graph, device_pgm d_pgm
     if (nodes_effected[node_id] == 1) {
       // Compute residual of this node.
       // Residual is defined as the max of the residuals of the incoming messages.
-      float residual = 0.0;
+      double residual = 0.0;
       
       int start_incoming_idx = d_graph.node_idx_to_incoming_edges[node_id];
       int end_incoming_idx = d_graph.node_idx_to_incoming_edges[node_id + 1];
       for (int incoming_idx = start_incoming_idx; incoming_idx < end_incoming_idx; ++incoming_idx) {
-	float edge_residual = edge_residuals[d_graph.node_incoming_edges[incoming_idx]];
+	double edge_residual = edge_residuals[d_graph.node_incoming_edges[incoming_idx]];
 	if (edge_residual > residual)
 	  residual = edge_residual;
       }
@@ -130,7 +130,7 @@ __global__ void rs_compute_node_residuals(device_graph d_graph, device_pgm d_pgm
   }
 }
 
-std::tuple<float, std::vector<float>, int, std::vector<std::pair<int, int>>, std::vector<std::pair<float, int>>> infer(pgm* pgm, float epsilon, int timeout, std::vector<int> runtime_params, bool verbose) {
+std::tuple<float, std::vector<double>, int, std::vector<std::pair<int, int>>, std::vector<std::pair<float, int>>> infer(pgm* pgm, double epsilon, int timeout, std::vector<int> runtime_params, bool verbose) {
 
   //
   // Setup GPU data.
@@ -151,14 +151,14 @@ std::tuple<float, std::vector<float>, int, std::vector<std::pair<int, int>>, std
 
   // Create a residual array - each node gets a residual.
   // At each round, to determine who to update, we perform a key-value sort and choose the top p keys.
-  float* d_node_residuals;
-  gpuErrchk(cudaMalloc((void**) &d_node_residuals, num_nodes * sizeof(float)));
-  std::vector<float> node_residuals_(num_nodes, 10.0); // Start all node_residuals as 10.0, so all nodes eventually update.
-  gpuErrchk(cudaMemcpy(d_node_residuals, node_residuals_.data(), num_nodes * sizeof(float), cudaMemcpyHostToDevice));
+  double* d_node_residuals;
+  gpuErrchk(cudaMalloc((void**) &d_node_residuals, num_nodes * sizeof(double)));
+  std::vector<double> node_residuals_(num_nodes, 10.0); // Start all node_residuals as 10.0, so all nodes eventually update.
+  gpuErrchk(cudaMemcpy(d_node_residuals, node_residuals_.data(), num_nodes * sizeof(double), cudaMemcpyHostToDevice));
 
-  float* d_node_residuals_out;
-  gpuErrchk(cudaMalloc((void**) &d_node_residuals_out, num_nodes * sizeof(float)));
-  float* top_residual = (float*) malloc(sizeof(float));
+  double* d_node_residuals_out;
+  gpuErrchk(cudaMalloc((void**) &d_node_residuals_out, num_nodes * sizeof(double)));
+  double* top_residual = (double*) malloc(sizeof(double));
   std::vector<int> node_ids_;
   for (int i = 0; i < num_nodes; ++i) {
     node_ids_.push_back(i);
@@ -168,10 +168,10 @@ std::tuple<float, std::vector<float>, int, std::vector<std::pair<int, int>>, std
   gpuErrchk(cudaMemcpy(d_node_ids, node_ids_.data(), num_nodes * sizeof(int), cudaMemcpyHostToDevice));
 
   // We also need residuals for our edges, which are used to compute the node residuals.
-  float* d_edge_residuals;
-  gpuErrchk(cudaMalloc((void**) &d_edge_residuals, num_edges * sizeof(float)));
-  std::vector<float> edge_residuals_(num_edges, 10.0); // Start all edge_residuals as 10.0, so all edges eventually update.
-  gpuErrchk(cudaMemcpy(d_edge_residuals, edge_residuals_.data(), num_edges * sizeof(float), cudaMemcpyHostToDevice));
+  double* d_edge_residuals;
+  gpuErrchk(cudaMalloc((void**) &d_edge_residuals, num_edges * sizeof(double)));
+  std::vector<double> edge_residuals_(num_edges, 10.0); // Start all edge_residuals as 10.0, so all edges eventually update.
+  gpuErrchk(cudaMemcpy(d_edge_residuals, edge_residuals_.data(), num_edges * sizeof(double), cudaMemcpyHostToDevice));
 
   // Indicate whether a given node's residual should be updated after other nodes are updated.
   int* d_node_effected;
@@ -205,7 +205,7 @@ std::tuple<float, std::vector<float>, int, std::vector<std::pair<int, int>>, std
 
   if (runtime_params.size() < 1) {
     std::cout << "RS requires parallelism divisor a, where p = 1/2^a." << std::endl;
-    return std::tuple<float, std::vector<float>, int, std::vector<std::pair<int, int>>, std::vector<std::pair<float, int>>>(0.0,{},0,{},{});
+    return std::tuple<float, std::vector<double>, int, std::vector<std::pair<int, int>>, std::vector<std::pair<float, int>>>(0.0,{},0,{},{});
   }
   float p = 1.0 / (float) std::pow(2, runtime_params[0]);
 
@@ -301,7 +301,7 @@ std::tuple<float, std::vector<float>, int, std::vector<std::pair<int, int>>, std
     // Finally we need to extend our edges_effected by one more step.
     // To do this we need to use our workspace to avoid a race condition.
     // Start by copying the current edges effected into the workspace.
-    gpuErrchk(cudaMemcpy(d_edges_effected_workspace, d_edges_effected, num_edges * sizeof(float), cudaMemcpyDeviceToDevice));
+    gpuErrchk(cudaMemcpy(d_edges_effected_workspace, d_edges_effected, num_edges * sizeof(int), cudaMemcpyDeviceToDevice));
 
     // A little hacky this approach but it avoids a bunch of only slightly different code.
     rs_generate_next_frontier<<<gridSizeFrontier, blockSizeFrontier>>>(infer_data.first, infer_data.second, d_node_effected, d_edges_effected_workspace, d_edges_effected, d_edges_effected, num_edges, false);
@@ -313,7 +313,7 @@ std::tuple<float, std::vector<float>, int, std::vector<std::pair<int, int>>, std
       rs_calculate_updates<<<gridSizeCalcUpdates, blockSizeCalcUpdates>>>(infer_data.first, infer_data.second, d_frontier, num_edges, false);
 
       // Set the edges equal to the workspace each time.
-      gpuErrchk(cudaMemcpy(infer_data.second.edges, infer_data.second.workspace, edge_rep_size * sizeof(float), cudaMemcpyDeviceToDevice));
+      gpuErrchk(cudaMemcpy(infer_data.second.edges, infer_data.second.workspace, edge_rep_size * sizeof(double), cudaMemcpyDeviceToDevice));
     }
 
     // Now we do the forwards pass through our frontiers. This is the distribution phase, where we make the leaves aware of the root.
@@ -322,13 +322,13 @@ std::tuple<float, std::vector<float>, int, std::vector<std::pair<int, int>>, std
       rs_calculate_updates<<<gridSizeCalcUpdates, blockSizeCalcUpdates>>>(infer_data.first, infer_data.second, d_frontiers[update], num_edges, true);
 
       // Set the edges equal to the workspace each time.
-      gpuErrchk(cudaMemcpy(infer_data.second.edges, infer_data.second.workspace, edge_rep_size * sizeof(float), cudaMemcpyDeviceToDevice));
+      gpuErrchk(cudaMemcpy(infer_data.second.edges, infer_data.second.workspace, edge_rep_size * sizeof(double), cudaMemcpyDeviceToDevice));
     }
 
     // Compute the updated edge residuals.
     rs_compute_edge_residuals<<<gridSizeEdgeResiduals, blockSizeEdgeResiduals>>>(infer_data.first, infer_data.second, d_edge_residuals, d_edges_effected, num_edges);
 
-    gpuErrchk(cudaMemcpy(infer_data.second.workspace, infer_data.second.edges, edge_rep_size * sizeof(float), cudaMemcpyDeviceToDevice));
+    gpuErrchk(cudaMemcpy(infer_data.second.workspace, infer_data.second.edges, edge_rep_size * sizeof(double), cudaMemcpyDeviceToDevice));
 
     // Finally, compute the updated node residuals.
     rs_compute_node_residuals<<<gridSizeNodeResiduals, blockSizeNodeResiduals>>>(infer_data.first, infer_data.second, d_node_residuals, d_edge_residuals, d_node_effected, num_nodes);
@@ -343,7 +343,7 @@ std::tuple<float, std::vector<float>, int, std::vector<std::pair<int, int>>, std
     cub::DeviceRadixSort::SortPairsDescending(d_temp_storage, temp_storage_bytes, d_node_residuals, d_node_residuals_out, d_node_ids, d_node_ids_out, num_nodes);
 
     // Check largest residual. If it's less than epsilon, we know we've converged.
-    gpuErrchk(cudaMemcpy(top_residual, d_node_residuals_out, sizeof(float), cudaMemcpyDeviceToHost)); // Only copy back the first value.
+    gpuErrchk(cudaMemcpy(top_residual, d_node_residuals_out, sizeof(double), cudaMemcpyDeviceToHost)); // Only copy back the first value.
     converged = *top_residual < epsilon;
 
     since = std::clock();
@@ -356,9 +356,9 @@ std::tuple<float, std::vector<float>, int, std::vector<std::pair<int, int>>, std
   gpuErrchk(cudaEventElapsedTime(&milliseconds, start,stop));
  
   // Now the convergence should be complete, and we can launch a new kernel to determine the marginal distributions.
-  std::vector<float> result = compute_marginals(pgm, infer_data.first, infer_data.second, verbose);
+  std::vector<double> result = compute_marginals(pgm, infer_data.first, infer_data.second, verbose);
   if (verbose) {
-    print_floats(result.data(), result.size());
+    print_doubles(result.data(), result.size());
     std::cout << "Stopped after " << iterations << " iterations." << std::endl;
   }
  
@@ -378,5 +378,5 @@ std::tuple<float, std::vector<float>, int, std::vector<std::pair<int, int>>, std
   free(top_residual);
   free_gpu_data(infer_data);
 
-  return std::tuple<float, std::vector<float>, int, std::vector<std::pair<int,int>>, std::vector<std::pair<float, int>>>(converged ? milliseconds : -1.0, result, converged ? iterations : -1, {}, {});
+  return std::tuple<float, std::vector<double>, int, std::vector<std::pair<int,int>>, std::vector<std::pair<float, int>>>(converged ? milliseconds : -1.0, result, converged ? iterations : -1, {}, {});
 }

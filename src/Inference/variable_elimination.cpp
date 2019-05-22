@@ -16,7 +16,7 @@
 
 // Get the tau value for a given setting.
 // Start by building a query index, then returning the value at that index.
-float query_tau(std::map<int,int> settings, std::vector<float> &tau) {
+double query_tau(std::map<int,int> settings, std::vector<double> &tau) {
   // Now for each node, the value for that node is multiplied by the
   // number of settings of the following nodes to add to the query index.
   int query_index = 0;
@@ -40,7 +40,7 @@ float query_tau(std::map<int,int> settings, std::vector<float> &tau) {
 }
 
 // Query the given edge potential using the settings.
-float query_edge_potential(std::map<int, int> &settings, std::vector<float> &edge_factors, int edge_factor_start, std::vector<int> &edge_id_to_dest_node) {
+double query_edge_potential(std::map<int, int> &settings, std::vector<double> &edge_factors, int edge_factor_start, std::vector<int> &edge_id_to_dest_node) {
 
   // First need to find out which nodes we are working with.
   int first_node = edge_id_to_dest_node[edge_factors[edge_factor_start]];
@@ -54,11 +54,11 @@ float query_edge_potential(std::map<int, int> &settings, std::vector<float> &edg
 }
 
 // For the given settings map, determine the value after summing out a given node.
-float get_value(pgm* pgm, int node_id, std::vector<float> &node_unary_potential, std::map<int, int> &settings, std::vector<int> &edge_potential_starts, std::vector<float> &tau) {
-  float value = 0.0;
+double get_value(pgm* pgm, int node_id, std::vector<double> &node_unary_potential, std::map<int, int> &settings, std::vector<int> &edge_potential_starts, std::vector<double> &tau) {
+  double value = 0.0;
 
   for (int node_setting = 0; node_setting < node_unary_potential.size(); ++node_setting) {
-    float setting_value = 1.0;
+    double setting_value = 1.0;
     
     // Add the node to remove's setting to the map.
     settings[node_id] = node_setting;
@@ -108,8 +108,8 @@ bool increment_settings(std::map<int, int> &settings, std::set<int> nodes, std::
 // Given a node to sum out and the previous tau (resid. factor), determine new
 // tau summing out the given node.
 // Tau encoding: # nodes, node ids, node sizes, {factor}
-std::vector<float> sum_out(pgm* pgm, int node_id, std::vector<float> &tau, std::set<int> &summed_out) {
-  std::vector<float> new_tau;
+std::vector<double> sum_out(pgm* pgm, int node_id, std::vector<double> &tau, std::set<int> &summed_out) {
+  std::vector<double> new_tau;
   std::map<int, int> new_tau_node_sizes;
 
   // Track where the edge potentials start for all relevant edges.
@@ -153,11 +153,11 @@ std::vector<float> sum_out(pgm* pgm, int node_id, std::vector<float> &tau, std::
   // Write tau nodes and sizes:
   // Also, create a map from node id to setting, starting at 0.
   std::map<int, int> settings;
-  for (float node_id: new_tau_nodes) {
+  for (double node_id: new_tau_nodes) {
     new_tau.push_back(node_id);
     settings[node_id] = 0;
   }
-  for (float node_id: new_tau_nodes) {
+  for (double node_id: new_tau_nodes) {
     new_tau.push_back(new_tau_node_sizes[node_id]);
   }
   int factor_start = new_tau.size();
@@ -165,7 +165,7 @@ std::vector<float> sum_out(pgm* pgm, int node_id, std::vector<float> &tau, std::
   // Create vector holding unary potential for node to remove:
   int node_factor_start = pgm->node_idx_to_node_factor_idx[node_id];
   int node_size = pgm->node_factors[node_factor_start];
-  std::vector<float> unary_potential(node_size);
+  std::vector<double> unary_potential(node_size);
   
   for (int node_setting = 0; node_setting < node_size; ++node_setting) {
     unary_potential[node_setting] = pgm->node_factors[node_factor_start + 1 + node_setting];
@@ -179,14 +179,14 @@ std::vector<float> sum_out(pgm* pgm, int node_id, std::vector<float> &tau, std::
   return new_tau;
 }
 
-void print_tau(std::vector<float> tau) {
+void print_tau(std::vector<double> tau) {
  for (int tau_idx = 0; tau_idx < tau.size(); ++tau_idx) {
     std::cout << tau[tau_idx] << ",";
   }
   std::cout << std::endl;
 }
 
-std::tuple<float, std::vector<float>, int, std::vector<std::pair<int, int>>, std::vector<std::pair<float, int>>> infer(pgm* pgm, float epsilon, int timeout, std::vector<int> runtime_params, bool verbose) {
+std::tuple<float, std::vector<double>, int, std::vector<std::pair<int, int>>, std::vector<std::pair<float, int>>> infer(pgm* pgm, double epsilon, int timeout, std::vector<int> runtime_params, bool verbose) {
 
   // First pass: only calculating the last marginal.
 
@@ -195,13 +195,13 @@ std::tuple<float, std::vector<float>, int, std::vector<std::pair<int, int>>, std
   int num_edges = pgm->edge_idx_to_edges_idx.size();
   int num_nodes = pgm->pgm_graph->node_idx_to_outgoing_edges.size()-1;
 
-  std::vector<float> marginals;
+  std::vector<double> marginals;
 
   auto start = std::chrono::steady_clock::now();
 
   // Tau is a "residual" factor, after summing out some node.
   for (int node = 0; node < num_nodes; ++node) {
-    std::vector<float> tau = {};
+    std::vector<double> tau = {};
 
     std::set<int> summed_out;
     for (int node_id = 0; node_id < num_nodes; ++node_id) {
@@ -218,7 +218,7 @@ std::tuple<float, std::vector<float>, int, std::vector<std::pair<int, int>>, std
     }
 
     // Normalize:
-    float total = 0.0;
+    double total = 0.0;
     for (int tau_idx = 3; tau_idx < tau.size(); ++tau_idx) {
       total += tau[tau_idx];
     }
@@ -236,6 +236,6 @@ std::tuple<float, std::vector<float>, int, std::vector<std::pair<int, int>>, std
   auto diff = end - start;
   auto converge_time = std::chrono::duration<double, std::milli>(diff).count();
 
-  std::tuple<float, std::vector<float>, int, std::vector<std::pair<int, int>>, std::vector<std::pair<float, int>>> results(converge_time, marginals, 0, {}, {});
+  std::tuple<float, std::vector<double>, int, std::vector<std::pair<int, int>>, std::vector<std::pair<float, int>>> results(converge_time, marginals, 0, {}, {});
   return results;
 }
