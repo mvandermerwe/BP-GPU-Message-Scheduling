@@ -6,11 +6,11 @@ This repository holds source code for the paper "Message Scheduling for Performa
 
 Our work depends on the following:
 
-⋅⋅* gcc/5.4.0
-⋅⋅* cuda/9.1
-⋅⋅* boost/1.66.0
-⋅⋅* [cuRAND](https://developer.nvidia.com/curand)
-⋅⋅* [cub](https://nvlabs.github.io/cub/)
+* gcc/5.4.0
+* cuda/9.1
+* boost/1.66.0
+* [cuRAND](https://developer.nvidia.com/curand)
+* [cub](https://nvlabs.github.io/cub/)
 
 Other versions of GCC, CUDA, and Boost may work, but not confirmed.
 
@@ -33,7 +33,8 @@ make SRC=main.cpp INFER=rnbp
 SRC can be set to main.cpp for running single examples or time_tests.cpp for doing more extensive timing tests (as run in the paper).
 
 INFER can be set to:
-⋅⋅* GPU (Makefile.parallel): loopy, rbp, rs, rnbp
-⋅⋅* CPU (Makefile.serial): loopy, rbp, ve
+* GPU (Makefile.parallel): loopy, rbp, rs, rnbp
+* CPU (Makefile.serial): loopy, rbp, ve
 
-Contact: Mark Van der Merwe, mark.vandermerwe@utah.edu
+### Contact 
+Mark Van der Merwe, mark.vandermerwe@utah.edu
