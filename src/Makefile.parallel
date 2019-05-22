@@ -28,12 +28,12 @@ endif
 OBJS			:=	$(CU_OBJS)
 
 # include directories
-INC_DIRS	:=	/usr/local/cuda-9.1/include \
-                        ~/Documents/cub/cub/ \
+INC_DIRS	:=	$(CUDA_INC) \
+                        $(CUB_HOME) \
 			$(BOOST_INC)
 
 # library directories
-LIB_DIRS	:=	/usr/common/usg/cuda-9.1/lib64 \
+LIB_DIRS	:=	$(CUDA_LIB) \
 			$(BOOST_LIB)
 
 # libraries
