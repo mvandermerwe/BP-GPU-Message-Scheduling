@@ -28,7 +28,7 @@ __global__ void random_update(device_graph d_graph, device_pgm d_pgm, double* re
 
     // Determine if this edge needs to be updated, that is, if the residual for this edge is greater than epsilon.
     if (residuals[edge_id] > epsilon) {
-      if (rand_vals[edge_id] >= p) {
+      if (rand_vals[edge_id] <= p) {
 	compute_message(d_graph, d_pgm, edge_id);
       }
     }
