@@ -1,0 +1,61 @@
+# Makefile for GPU BP code - based on Makefile shown here: https://gist.github.com/yzhwang/5120437
+
+CC			=	nvcc
+NVCC			=	nvcc
+LD			=	nvcc
+
+EXE			:= 	${SRC:.cpp=.out}
+CU_SRCS			:= 	Representation/pgm.cpp Representation/graph.cpp Inference/infer_data.cu Inference/inference_helpers.cu Tests/test_helpers.cpp Tests/time_tests_helpers.cpp $(SRC)
+CU_OBJS			:=	Representation/pgm.o Representation/graph.o Inference/infer_data.o Inference/inference_helpers.o Tests/test_helpers.o Tests/time_tests_helpers.o ${SRC:.cpp=.o}
+
+ifeq ($(INFER), loopy)
+CU_SRCS			+= 	Inference/loopy_belief_propagation.cu
+CU_OBJS			+=	Inference/loopy_belief_propagation.o
+endif
+ifeq ($(INFER), rbp)
+CU_SRCS			+=	Inference/residual_belief_propagation.cu
+CU_OBJS			+=	Inference/residual_belief_propagation.o
+endif
+ifeq ($(INFER), rs)
+CU_SRCS			+= 	Inference/residual_splash.cu
+CU_OBJS 		+= 	Inference/residual_splash.o
+endif
+ifeq ($(INFER), rnbp)
+CU_SRCS			+= 	Inference/random_belief_propagation.cu
+CU_OBJS 		+=	Inference/random_belief_propagation.o
+endif
+
+OBJS			:=	$(CU_OBJS)
+
+# include directories
+INC_DIRS	:=	/usr/local/cuda-9.1/include \
+                        ~/Documents/cub/cub/ \
+			$(BOOST_INC)
+
+# library directories
+LIB_DIRS	:=	/usr/common/usg/cuda-9.1/lib64 \
+			$(BOOST_LIB)
+
+# libraries
+LIBS		:=	
+
+CCFLAGS		+=	-std=c++11 -dc -g -G $(foreach includedir, $(INC_DIRS), -I $(includedir))
+LDFLAGS         +=      -lcurand -lboost_system -lboost_filesystem -g -G $(foreach includedir, $(INC_DIRS), -I $(includedir))
+LDFLAGS		+=	$(foreach librarydir, $(LIB_DIRS), -L $(librarydir))
+LDFLAGS		+=	$(foreach library, $(LIBS), -l$(library))
+
+.PHONY:		all clean distclean
+
+$(EXE): $(OBJS)
+	$(LD) $(OBJS) $(LDFLAGS) -o $(EXE)
+
+.cpp.o:
+	$(CC) $(CCFLAGS) -c $< -o $@
+
+%.o : %.cu
+	$(NVCC) $(CCFLAGS) -c $< -o $@
+
+clean:
+	rm -vf $(EXE) $(OBJS)
+	rm *.out *.o
+	rm Inference/*.o
